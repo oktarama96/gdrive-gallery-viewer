@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rama Gallery | Photography</title>
+    <title>Rama Gallery | Media Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -20,8 +20,8 @@
     <div class="max-w-7xl mx-auto px-4 py-8">
         <!-- Header -->
         <header class="mb-12 text-center">
-            <h1 class="text-4xl font-bold tracking-tight text-white mb-2">PHOTO GALLERY</h1>
-            <p class="text-slate-400">Minimalist portfolio viewer (v4 - Smart URL Parsing)</p>
+            <h1 class="text-4xl font-bold tracking-tight text-white mb-2">MEDIA GALLERY</h1>
+            <p class="text-slate-400">Minimalist portfolio viewer (v5 - Photos & Videos)</p>
         </header>
 
         <!-- Config Section -->
@@ -30,7 +30,7 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Google Apps Script URL</label>
                     <input type="text" id="gas-url" 
-                        value="https://script.google.com/macros/s/AKfycbzcE3I8FqxHHw6NvVjoHvaaIjXu4ioF1S1aZg7gjwvJIIMYzdjNOJzrUVW80sGV53ic/exec"
+                        value="https://script.google.com/macros/s/AKfycbw1QIiHTngZeqGE-5YoxtjGF6dZiGAmAFF1na15BI5vUUTL_veII6_qO2y9q_B6A5nq/exec"
                         class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs">
                 </div>
                 <div>
@@ -46,6 +46,13 @@
             </div>
         </div>
 
+        <!-- Filter Tabs -->
+        <div id="filter-tabs" class="hidden justify-center gap-2 mb-8 animate-fade-in">
+            <button onclick="setFilter('all')" id="filter-all" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-blue-600 text-white shadow-lg">All</button>
+            <button onclick="setFilter('photos')" id="filter-photos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Photos</button>
+            <button onclick="setFilter('videos')" id="filter-videos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Videos</button>
+        </div>
+
         <!-- Gallery Grid -->
         <div id="loading" class="hidden text-center py-12">
             <div class="animate-spin text-4xl mb-4 text-blue-500"><i class="fas fa-circle-notch"></i></div>
@@ -57,12 +64,140 @@
         </div>
     </div>
 
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center backdrop-blur-md transition-opacity duration-300 opacity-0">
+        <!-- Close Button -->
+        <button onclick="closeLightbox()" class="absolute top-6 right-6 text-slate-400 hover:text-white text-3xl focus:outline-none z-50 transition-colors">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <!-- Navigation Buttons -->
+        <button onclick="prevMedia()" class="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-4xl focus:outline-none z-50 transition-colors bg-black/30 hover:bg-black/60 w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-sm">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <button onclick="nextMedia()" class="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-4xl focus:outline-none z-50 transition-colors bg-black/30 hover:bg-black/60 w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-sm">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+
+        <!-- Content Container -->
+        <div class="max-w-5xl max-h-[80vh] w-full px-4 flex flex-col items-center justify-center">
+            <div id="lightbox-content" class="w-full flex items-center justify-center select-none">
+                <!-- Media will be dynamically loaded here -->
+            </div>
+            <!-- Title & Info -->
+            <div class="mt-4 text-center w-full max-w-3xl">
+                <p id="lightbox-title" class="text-sm font-semibold text-white truncate"></p>
+                <div class="flex justify-center gap-4 mt-2">
+                    <a id="lightbox-download" href="#" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                        <i class="fas fa-download"></i> Download Original
+                    </a>
+                    <span class="text-slate-600">|</span>
+                    <a id="lightbox-external" href="#" target="_blank" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+                        <i class="fas fa-external-link-alt"></i> Open in Drive
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let allMedia = [];
+        let activeFilter = 'all';
+        let currentLightboxIndex = -1;
+
         // Extract Folder ID from various Drive URL formats
         function extractFolderId(url) {
             const regex = /folders\/([a-zA-Z0-9_-]{25,})/;
             const match = url.match(regex);
             return match ? match[1] : url.trim(); // Fallback to raw input if regex fails
+        }
+
+        function isVideoFile(name, mimeType) {
+            if (mimeType && mimeType.startsWith('video/')) {
+                return true;
+            }
+            const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.flv'];
+            const lowerName = name.toLowerCase();
+            return videoExtensions.some(ext => lowerName.endsWith(ext));
+        }
+
+        function getFilteredMedia() {
+            return allMedia.filter(item => {
+                const isVideo = isVideoFile(item.name, item.mimeType);
+                if (activeFilter === 'photos') return !isVideo;
+                if (activeFilter === 'videos') return isVideo;
+                return true;
+            });
+        }
+
+        function renderGallery() {
+            const grid = document.getElementById('gallery-grid');
+            grid.innerHTML = '';
+            
+            const filtered = getFilteredMedia();
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">No ${activeFilter === 'all' ? 'files' : activeFilter} found in this folder.</div>`;
+                return;
+            }
+
+            filtered.forEach((item, index) => {
+                const isVideo = isVideoFile(item.name, item.mimeType);
+                const download = `https://drive.google.com/uc?export=download&id=${item.id}`;
+                
+                let mediaHtml = '';
+                let playIconHtml = '';
+                
+                // Get thumbnail link from item if available, otherwise fallback
+                let thumbnailSrc = '';
+                if (item.thumbnailLink) {
+                    thumbnailSrc = item.thumbnailLink.replace(/=s\d+$/, '=s500');
+                } else if (!isVideo) {
+                    thumbnailSrc = `https://lh3.googleusercontent.com/d/${item.id}=s1000`;
+                }
+                
+                if (isVideo) {
+                    if (thumbnailSrc) {
+                        mediaHtml = `<img src="${thumbnailSrc}" class="w-full h-full object-cover" alt="${item.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Video+Loading'">`;
+                    } else {
+                        mediaHtml = `
+                            <div class="w-full h-full flex flex-col items-center justify-center bg-slate-900/90 text-slate-400 p-4 border border-slate-700/30 rounded-xl">
+                                <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center mb-3 shadow-md border border-slate-700/50">
+                                    <i class="fas fa-video text-xl text-blue-500"></i>
+                                </div>
+                                <span class="text-[11px] font-medium text-center truncate w-full px-2 text-slate-300">${item.name}</span>
+                            </div>
+                        `;
+                    }
+                    playIconHtml = `
+                        <div class="absolute top-3 right-3 bg-blue-600/90 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg backdrop-blur-sm z-10">
+                            <i class="fas fa-play text-xs ml-0.5"></i>
+                        </div>
+                    `;
+                } else {
+                    mediaHtml = `<img src="${thumbnailSrc}" class="w-full h-full object-cover" alt="${item.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Error+Loading'">`;
+                }
+
+                const card = `
+                    <div class="photo-card relative bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700 aspect-square group animate-fade-in cursor-pointer" 
+                         style="animation-delay: ${index * 30}ms" onclick="openLightbox(${allMedia.indexOf(item)})">
+                        ${mediaHtml}
+                        ${playIconHtml}
+                        <div class="overlay absolute inset-0 bg-black/75 opacity-0 flex flex-col items-center justify-center p-4 transition-all duration-300">
+                            <p class="text-xs font-semibold mb-4 truncate w-full text-center px-2 text-white">${item.name}</p>
+                            <div class="flex gap-4" onclick="event.stopPropagation();">
+                                <a href="${download}" target="_blank" class="bg-blue-600 hover:bg-blue-700 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                <button onclick="openLightbox(${allMedia.indexOf(item)})" class="bg-slate-700 hover:bg-slate-600 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="View Full">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                grid.innerHTML += card;
+            });
         }
 
         async function loadPhotos() {
@@ -72,6 +207,7 @@
             const loading = document.getElementById('loading');
             const btn = document.getElementById('load-btn');
             const icon = document.getElementById('btn-icon');
+            const filterTabs = document.getElementById('filter-tabs');
 
             const folderId = extractFolderId(driveInput);
 
@@ -82,42 +218,29 @@
 
             loading.classList.remove('hidden');
             grid.innerHTML = '';
+            filterTabs.classList.add('hidden');
             btn.classList.add('btn-loading');
             icon.classList.add('animate-spin');
 
             try {
                 const response = await fetch(`/gallery/api/photos?folderId=${folderId}&gasUrl=${encodeURIComponent(gasUrl)}`);
                 const photos = await response.json();
-
                 if (photos.error) throw new Error(photos.error);
+                if (!Array.isArray(photos)) {
+                    if (typeof photos === 'string' && photos.includes('<!DOCTYPE html>')) {
+                        throw new Error('Google Apps Script returning HTML. Ensure deployment is configured as "Web App", accessible to "Anyone", and authorized to access Drive.');
+                    }
+                    throw new Error('Invalid server response. Expected a list of files.');
+                }
 
                 loading.classList.add('hidden');
-                
-                if (photos.length === 0) {
-                    grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No images found in this folder.</div>';
+                allMedia = photos;
+                if (allMedia.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No media found in this folder.</div>';
                 } else {
-                    photos.forEach((photo, index) => {
-                        const thumbnail = `https://lh3.googleusercontent.com/d/${photo.id}=s1000`;
-                        const download = `https://drive.google.com/uc?export=download&id=${photo.id}`;
-
-                        const card = `
-                            <div class="photo-card relative bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700 aspect-square group animate-fade-in" style="animation-delay: ${index * 50}ms">
-                                <img src="${thumbnail}" class="w-full h-full object-cover" alt="${photo.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Error+Loading'">
-                                <div class="overlay absolute inset-0 bg-black/70 opacity-0 flex flex-col items-center justify-center p-4">
-                                    <p class="text-xs font-semibold mb-4 truncate w-full text-center px-2 text-white">${photo.name}</p>
-                                    <div class="flex gap-4">
-                                        <a href="${download}" target="_blank" class="bg-blue-600 hover:bg-blue-700 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="Download">
-                                            <i class="fas fa-download"></i>
-                                        </a>
-                                        <a href="${thumbnail}" target="_blank" class="bg-slate-700 hover:bg-slate-600 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="View Full">
-                                            <i class="fas fa-expand"></i>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        grid.innerHTML += card;
-                    });
+                    filterTabs.classList.remove('hidden');
+                    filterTabs.classList.add('flex');
+                    renderGallery();
                 }
             } catch (err) {
                 loading.classList.add('hidden');
@@ -126,6 +249,107 @@
                 btn.classList.remove('btn-loading');
                 icon.classList.remove('animate-spin');
             }
+        }
+
+        function setFilter(filter) {
+            activeFilter = filter;
+            
+            // Update active filter button styling
+            ['all', 'photos', 'videos'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (f === filter) {
+                    btn.className = "px-5 py-2 rounded-full text-sm font-semibold transition bg-blue-600 text-white shadow-lg";
+                } else {
+                    btn.className = "px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700";
+                }
+            });
+            
+            renderGallery();
+        }
+
+        function openLightbox(index) {
+            const filtered = getFilteredMedia();
+            const item = allMedia[index];
+            const filteredIndex = filtered.indexOf(item);
+            
+            if (filteredIndex === -1) return;
+            
+            currentLightboxIndex = filteredIndex;
+            updateLightboxContent();
+            
+            const modal = document.getElementById('lightbox-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 10);
+            
+            document.addEventListener('keydown', handleLightboxKeydown);
+        }
+
+        function closeLightbox() {
+            const modal = document.getElementById('lightbox-modal');
+            modal.classList.add('opacity-0');
+            
+            // Stop any video/audio playing inside the iframe immediately by clearing contents
+            document.getElementById('lightbox-content').innerHTML = '';
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+            
+            document.removeEventListener('keydown', handleLightboxKeydown);
+        }
+
+        function updateLightboxContent() {
+            const filtered = getFilteredMedia();
+            if (currentLightboxIndex < 0 || currentLightboxIndex >= filtered.length) return;
+            
+            const item = filtered[currentLightboxIndex];
+            const isVideo = isVideoFile(item.name, item.mimeType);
+            const download = `https://drive.google.com/uc?export=download&id=${item.id}`;
+            const externalLink = `https://drive.google.com/file/d/${item.id}/view?usp=drivesdk`;
+            
+            const contentContainer = document.getElementById('lightbox-content');
+            const titleEl = document.getElementById('lightbox-title');
+            const downloadEl = document.getElementById('lightbox-download');
+            const externalEl = document.getElementById('lightbox-external');
+            
+            titleEl.textContent = item.name;
+            downloadEl.href = download;
+            externalEl.href = externalLink;
+            
+            if (isVideo) {
+                contentContainer.innerHTML = `
+                    <iframe src="https://drive.google.com/file/d/${item.id}/preview" class="w-[90vw] max-w-4xl h-[60vh] rounded-lg shadow-2xl border-0" allow="autoplay" referrerpolicy="no-referrer"></iframe>
+                `;
+            } else {
+                const fullImage = item.thumbnailLink 
+                    ? item.thumbnailLink.replace(/=s\d+$/, '=s2048') 
+                    : `https://lh3.googleusercontent.com/d/${item.id}=s2048`;
+                contentContainer.innerHTML = `
+                    <img src="${fullImage}" class="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" alt="${item.name}">
+                `;
+            }
+        }
+
+        function prevMedia() {
+            const filtered = getFilteredMedia();
+            if (filtered.length <= 1) return;
+            currentLightboxIndex = (currentLightboxIndex - 1 + filtered.length) % filtered.length;
+            updateLightboxContent();
+        }
+
+        function nextMedia() {
+            const filtered = getFilteredMedia();
+            if (filtered.length <= 1) return;
+            currentLightboxIndex = (currentLightboxIndex + 1) % filtered.length;
+            updateLightboxContent();
+        }
+
+        function handleLightboxKeydown(e) {
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowLeft') prevMedia();
+            else if (e.key === 'ArrowRight') nextMedia();
         }
     </script>
 </body>
