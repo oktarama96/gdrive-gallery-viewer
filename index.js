@@ -26,6 +26,34 @@ app.get('/gallery/api/photos', async (req, res) => {
   }
 });
 
+// Proxy media content to avoid CORS and third-party cookie restrictions (works on mobile & incognito)
+app.get('/gallery/api/media/:fileId', async (req, res) => {
+  const { fileId } = req.params;
+  const { gasUrl, size } = req.query;
+
+  if (!fileId || !gasUrl) {
+    return res.status(400).send('Missing fileId or gasUrl');
+  }
+
+  try {
+    const sizeParam = size ? `&size=${size}` : '';
+    const response = await axios.get(`${gasUrl}?fileId=${fileId}${sizeParam}`);
+    const data = response.data;
+
+    if (typeof data === 'string' && data.startsWith('Error:')) {
+      return res.status(500).send(data);
+    }
+
+    const buffer = Buffer.from(data, 'base64');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error proxying media:', error.message);
+    res.status(500).send('Failed to fetch media');
+  }
+});
+
 // Redirect root to /gallery for convenience
 app.get('/', (req, res) => {
   res.redirect('/gallery');

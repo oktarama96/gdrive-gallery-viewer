@@ -1,4 +1,17 @@
 function doGet(e) {
+  var fileId = e.parameter.fileId;
+  if (fileId) {
+    try {
+      var file = DriveApp.getFileById(fileId);
+      var blob = (e.parameter.size === 'full') ? file.getBlob() : (file.getThumbnail() || file.getBlob());
+      return ContentService.createTextOutput(Utilities.base64Encode(blob.getBytes()))
+        .setMimeType(ContentService.MimeType.TEXT);
+    } catch (error) {
+      return ContentService.createTextOutput("Error: " + error.message)
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+  }
+
   var folderId = e.parameter.id;
   if (!folderId) {
     return ContentService.createTextOutput(JSON.stringify({error: "Missing folder ID"})).setMimeType(ContentService.MimeType.JSON);
@@ -55,7 +68,7 @@ function getFilesWithDriveApp(folderId) {
           id: file.getId(),
           name: file.getName(),
           mimeType: mimeType,
-          thumbnailLink: "https://lh3.googleusercontent.com/d/" + file.getId() + "=s1000" // Fallback thumbnail link
+          thumbnailLink: "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w500" // Fallback thumbnail link using cookie-authenticated Drive endpoint
         });
       }
     }

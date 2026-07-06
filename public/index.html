@@ -30,7 +30,7 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Google Apps Script URL</label>
                     <input type="text" id="gas-url" 
-                        value="https://script.google.com/macros/s/AKfycbw1QIiHTngZeqGE-5YoxtjGF6dZiGAmAFF1na15BI5vUUTL_veII6_qO2y9q_B6A5nq/exec"
+                        value="https://script.google.com/macros/s/AKfycbykECSMRFoy_xfcoiuZFviwrf0959fCy3_8b-pd_ldJTN7SXNPr5U-iJoDYpVHnsPgm/exec"
                         class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs">
                 </div>
                 <div>
@@ -44,6 +44,20 @@
                     <span>Load Gallery</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Private Folder Notice Banner -->
+        <div id="private-folder-banner" class="hidden bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 p-4 rounded-xl mb-8 max-w-2xl mx-auto flex items-center justify-between gap-4 animate-fade-in">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle text-xl"></i>
+                <div class="text-left">
+                    <p class="font-semibold text-sm">Media Loading Blocked</p>
+                    <p class="text-xs text-yellow-400/80">Some files failed to load. The Google Drive folder may be private. Try logging in to Google.</p>
+                </div>
+            </div>
+            <button onclick="showLoginModal()" class="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-semibold py-1.5 px-3 rounded-lg text-xs transition duration-200">
+                Sign In to Google
+            </button>
         </div>
 
         <!-- Filter Tabs -->
@@ -81,7 +95,7 @@
 
         <!-- Content Container -->
         <div class="max-w-5xl max-h-[80vh] w-full px-4 flex flex-col items-center justify-center">
-            <div id="lightbox-content" class="w-full flex items-center justify-center select-none">
+            <div id="lightbox-content" class="w-full flex items-center justify-center select-none relative min-h-[300px]">
                 <!-- Media will be dynamically loaded here -->
             </div>
             <!-- Title & Info -->
@@ -100,10 +114,44 @@
         </div>
     </div>
 
+    <!-- Google Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center backdrop-blur-md transition-opacity duration-300 opacity-0">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-md p-6 rounded-2xl shadow-2xl relative mx-4 text-center">
+            <!-- Close button -->
+            <button onclick="hideLoginModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+            <!-- Google Icon -->
+            <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-md border border-slate-100">
+                <svg class="w-8 h-8" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 0, 0)">
+                        <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.6h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.4C21.68,11.77 21.56,11.4 21.35,11.1z" fill="#4285F4"/>
+                        <path d="M12,20.68c2.61,0 4.8,-0.87 6.4,-2.37l-3.3,-2.6c-0.9,0.6 -2.07,0.97 -3.1,0.97 -2.39,0 -4.41,-1.61 -5.14,-3.8H3.45v2.7C5.07,18.77 8.3,20.68 12,20.68z" fill="#34A853"/>
+                        <path d="M6.86,13.08c-0.18,-0.55 -0.28,-1.13 -0.28,-1.73s0.1,-1.18 0.28,-1.73V6.92H3.45C2.83,8.15 2.48,9.54 2.48,11s0.35,2.85 0.97,4.08l3.41,-2.7z" fill="#FBBC05"/>
+                        <path d="M12,5.32c1.42,0 2.7,0.49 3.7,1.44l2.78,-2.78C16.8,2.44 14.61,1.32 12,1.32c-3.7,0 -6.93,1.91 -8.55,4.91l3.41,2.69c0.73,-2.19 2.75,-3.8 5.14,-3.8z" fill="#EA4335"/>
+                    </g>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-white mb-2">Google Login Required</h3>
+            <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+                To access and view the files in this Google Drive folder, you need to sign in with Google and authorize access.
+            </p>
+            <button id="modal-login-btn" onclick="openGoogleLoginPopup()" 
+                class="w-full bg-white hover:bg-slate-100 text-slate-900 font-semibold py-3 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-3 shadow-lg">
+                <i class="fab fa-google text-lg"></i>
+                <span>Sign In with Google</span>
+            </button>
+            <div id="login-status-indicator" class="hidden mt-4 text-xs text-blue-400 animate-pulse">
+                <i class="fas fa-circle-notch animate-spin mr-1"></i> Waiting for login to complete...
+            </div>
+        </div>
+    </div>
+
     <script>
         let allMedia = [];
         let activeFilter = 'all';
         let currentLightboxIndex = -1;
+        let imageErrorCount = 0;
 
         // Extract Folder ID from various Drive URL formats
         function extractFolderId(url) {
@@ -151,14 +199,14 @@
                 // Get thumbnail link from item if available, otherwise fallback
                 let thumbnailSrc = '';
                 if (item.thumbnailLink) {
-                    thumbnailSrc = item.thumbnailLink.replace(/=s\d+$/, '=s500');
+                    thumbnailSrc = item.thumbnailLink; // Preserve exact signature to prevent 403 errors
                 } else if (!isVideo) {
-                    thumbnailSrc = `https://lh3.googleusercontent.com/d/${item.id}=s1000`;
+                    thumbnailSrc = `https://drive.google.com/thumbnail?id=${item.id}&sz=w500`;
                 }
                 
                 if (isVideo) {
                     if (thumbnailSrc) {
-                        mediaHtml = `<img src="${thumbnailSrc}" class="w-full h-full object-cover" alt="${item.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Video+Loading'">`;
+                        mediaHtml = `<img src="${thumbnailSrc}" data-id="${item.id}" class="w-full h-full object-cover opacity-0 transition-opacity duration-500" alt="${item.name}" loading="lazy" referrerpolicy="no-referrer" onload="if(this.previousElementSibling && this.previousElementSibling.classList.contains('image-loader')) this.previousElementSibling.remove(); this.classList.remove('opacity-0');" onerror="handleImageLoadError(this, true)">`;
                     } else {
                         mediaHtml = `
                             <div class="w-full h-full flex flex-col items-center justify-center bg-slate-900/90 text-slate-400 p-4 border border-slate-700/30 rounded-xl">
@@ -175,12 +223,21 @@
                         </div>
                     `;
                 } else {
-                    mediaHtml = `<img src="${thumbnailSrc}" class="w-full h-full object-cover" alt="${item.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Error+Loading'">`;
+                    mediaHtml = `<img src="${thumbnailSrc}" data-id="${item.id}" class="w-full h-full object-cover opacity-0 transition-opacity duration-500" alt="${item.name}" loading="lazy" referrerpolicy="no-referrer" onload="if(this.previousElementSibling && this.previousElementSibling.classList.contains('image-loader')) this.previousElementSibling.remove(); this.classList.remove('opacity-0');" onerror="handleImageLoadError(this, false)">`;
                 }
+
+                // Show spinner only for elements with an actual image tag
+                const hasImageTag = isVideo ? !!thumbnailSrc : true;
+                const loaderHtml = hasImageTag ? `
+                    <div class="absolute inset-0 flex items-center justify-center bg-slate-900/30 image-loader">
+                        <div class="animate-spin text-xl text-blue-500"><i class="fas fa-circle-notch"></i></div>
+                    </div>
+                ` : '';
 
                 const card = `
                     <div class="photo-card relative bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700 aspect-square group animate-fade-in cursor-pointer" 
                          style="animation-delay: ${index * 30}ms" onclick="openLightbox(${allMedia.indexOf(item)})">
+                        ${loaderHtml}
                         ${mediaHtml}
                         ${playIconHtml}
                         <div class="overlay absolute inset-0 bg-black/75 opacity-0 flex flex-col items-center justify-center p-4 transition-all duration-300">
@@ -208,6 +265,7 @@
             const btn = document.getElementById('load-btn');
             const icon = document.getElementById('btn-icon');
             const filterTabs = document.getElementById('filter-tabs');
+            const privateBanner = document.getElementById('private-folder-banner');
 
             const folderId = extractFolderId(driveInput);
 
@@ -219,18 +277,52 @@
             loading.classList.remove('hidden');
             grid.innerHTML = '';
             filterTabs.classList.add('hidden');
+            privateBanner.classList.add('hidden');
             btn.classList.add('btn-loading');
             icon.classList.add('animate-spin');
+            imageErrorCount = 0;
 
             try {
-                const response = await fetch(`/gallery/api/photos?folderId=${folderId}&gasUrl=${encodeURIComponent(gasUrl)}`);
-                const photos = await response.json();
+                let photos;
+                let directFetchSucceeded = false;
+
+                // 1. Try client-side direct fetch first (this works if they are logged in and bypasses proxy)
+                try {
+                    const directResponse = await fetch(`${gasUrl}?id=${folderId}`);
+                    if (directResponse.ok) {
+                        const text = await directResponse.text();
+                        if (!text.includes('<!DOCTYPE html>') && !text.includes('ServiceLogin')) {
+                            const parsed = JSON.parse(text);
+                            if (parsed && !parsed.error && Array.isArray(parsed)) {
+                                photos = parsed;
+                                directFetchSucceeded = true;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log('Direct fetch bypassed or failed, falling back to proxy:', e);
+                }
+
+                // 2. Fall back to proxy if direct fetch did not succeed
+                if (!directFetchSucceeded) {
+                    const response = await fetch(`/gallery/api/photos?folderId=${folderId}&gasUrl=${encodeURIComponent(gasUrl)}`);
+                    const text = await response.text();
+
+                    // Check if response is Google Login page (redirect HTML)
+                    if (text.includes('<!DOCTYPE html>') || text.includes('accounts.google.com') || text.includes('ServiceLogin')) {
+                        throw new Error('Google Login / Authorization is required to access the Apps Script.');
+                    }
+
+                    try {
+                        photos = JSON.parse(text);
+                    } catch (e) {
+                        throw new Error('Invalid response from server: ' + text.substring(0, 100));
+                    }
+                }
+
                 if (photos.error) throw new Error(photos.error);
                 if (!Array.isArray(photos)) {
-                    if (typeof photos === 'string' && photos.includes('<!DOCTYPE html>')) {
-                        throw new Error('Google Apps Script returning HTML. Ensure deployment is configured as "Web App", accessible to "Anyone", and authorized to access Drive.');
-                    }
-                    throw new Error('Invalid server response. Expected a list of files.');
+                    throw new Error('Invalid response format: expected a list of files.');
                 }
 
                 loading.classList.add('hidden');
@@ -244,10 +336,122 @@
                 }
             } catch (err) {
                 loading.classList.add('hidden');
-                alert('Error: ' + err.message);
+                
+                // Detect Google Authentication or Authorization errors
+                const isAuthError = err.message.includes('Google Login') || 
+                                    err.message.includes('returning HTML') || 
+                                    err.message.toLowerCase().includes('access denied') || 
+                                    err.message.toLowerCase().includes('permission') || 
+                                    err.message.toLowerCase().includes('authorization') ||
+                                    err.message.toLowerCase().includes('login') ||
+                                    err.message.toLowerCase().includes('sign in');
+                
+                if (isAuthError) {
+                    showLoginModal();
+                } else {
+                    alert('Error: ' + err.message);
+                }
             } finally {
                 btn.classList.remove('btn-loading');
                 icon.classList.remove('animate-spin');
+            }
+        }
+
+        // Modal control and helper functions
+        function showLoginModal() {
+            const modal = document.getElementById('login-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 10);
+        }
+
+        function hideLoginModal() {
+            const modal = document.getElementById('login-modal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function openGoogleLoginPopup() {
+            const driveInput = document.getElementById('drive-link').value.trim();
+            const loginUrl = (driveInput && (driveInput.startsWith('http://') || driveInput.startsWith('https://'))) 
+                ? driveInput 
+                : 'https://accounts.google.com/ServiceLogin';
+            
+            const w = 600;
+            const h = 650;
+            const left = (screen.width/2)-(w/2);
+            const top = (screen.height/2)-(h/2);
+            
+            const popup = window.open(loginUrl, 'GoogleLogin', `width=${w},height=${h},top=${top},left=${left},resizable=yes,scrollbars=yes,status=yes`);
+            
+            if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                alert('Popup blocker active! Please allow popups for this site to log in.');
+                return;
+            }
+            
+            const indicator = document.getElementById('login-status-indicator');
+            const loginBtn = document.getElementById('modal-login-btn');
+            if (indicator) indicator.classList.remove('hidden');
+            if (loginBtn) loginBtn.classList.add('pointer-events-none', 'opacity-50');
+            
+            const timer = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(timer);
+                    if (indicator) indicator.classList.add('hidden');
+                    if (loginBtn) loginBtn.classList.remove('pointer-events-none', 'opacity-50');
+                    
+                    hideLoginModal();
+                    loadPhotos(); // Auto retry
+                }
+            }, 1000);
+        }
+
+        function handleImageLoadError(img, isVideo) {
+            const fileId = img.getAttribute('data-id');
+            const fallbackStage = img.getAttribute('data-fallback-stage') || '0';
+            const gasUrl = document.getElementById('gas-url').value;
+            
+            if (fileId) {
+                if (fallbackStage === '0') {
+                    // Stage 1: Try cookie-authenticated drive.google.com/thumbnail
+                    img.setAttribute('data-fallback-stage', '1');
+                    img.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w500`;
+                    return;
+                } else if (fallbackStage === '1') {
+                    // Stage 2: Try our backend proxy (bypasses incognito/mobile cookie limits)
+                    img.setAttribute('data-fallback-stage', '2');
+                    img.src = `/gallery/api/media/${fileId}?gasUrl=${encodeURIComponent(gasUrl)}`;
+                    return;
+                }
+            }
+
+            // Replace with a placeholder if all fallbacks fail
+            if (isVideo) {
+                img.src = 'https://placehold.co/400x400/1e293b/white?text=Video+Loading';
+            } else {
+                img.src = 'https://placehold.co/400x400/1e293b/white?text=Private+File';
+            }
+            
+            imageErrorCount++;
+            if (imageErrorCount >= 1) {
+                document.getElementById('private-folder-banner').classList.remove('hidden');
+            }
+        }
+
+        function handleLightboxError(img, proxySrc, signedSrc) {
+            const stage = img.getAttribute('data-error-stage') || '0';
+            if (stage === '0') {
+                img.setAttribute('data-error-stage', '1');
+                img.src = proxySrc;
+            } else if (stage === '1' && signedSrc) {
+                img.setAttribute('data-error-stage', '2');
+                img.src = signedSrc;
+            } else {
+                img.onerror = null;
+                img.src = 'https://placehold.co/400x400/1e293b/white?text=Private+File';
             }
         }
 
@@ -320,14 +524,22 @@
             
             if (isVideo) {
                 contentContainer.innerHTML = `
-                    <iframe src="https://drive.google.com/file/d/${item.id}/preview" class="w-[90vw] max-w-4xl h-[60vh] rounded-lg shadow-2xl border-0" allow="autoplay" referrerpolicy="no-referrer"></iframe>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/30 image-loader">
+                        <div class="animate-spin text-3xl text-blue-500"><i class="fas fa-circle-notch"></i></div>
+                    </div>
+                    <iframe src="https://drive.google.com/file/d/${item.id}/preview" class="w-[90vw] max-w-4xl h-[60vh] rounded-lg shadow-2xl border-0 opacity-0 transition-opacity duration-300" allow="autoplay" referrerpolicy="no-referrer" onload="if(this.previousElementSibling && this.previousElementSibling.classList.contains('image-loader')) this.previousElementSibling.remove(); this.classList.remove('opacity-0');"></iframe>
                 `;
             } else {
-                const fullImage = item.thumbnailLink 
-                    ? item.thumbnailLink.replace(/=s\d+$/, '=s2048') 
-                    : `https://lh3.googleusercontent.com/d/${item.id}=s2048`;
+                // Try cookie-authenticated high-res Drive thumbnail first.
+                // Fall back to backend media proxy, and then finally to the signed thumbnailLink.
+                const gasUrl = document.getElementById('gas-url').value;
+                const fullImage = `https://drive.google.com/thumbnail?id=${item.id}&sz=w2048`;
+                const proxyImage = `/gallery/api/media/${item.id}?gasUrl=${encodeURIComponent(gasUrl)}&size=full`;
                 contentContainer.innerHTML = `
-                    <img src="${fullImage}" class="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl" alt="${item.name}">
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/30 image-loader">
+                        <div class="animate-spin text-3xl text-blue-500"><i class="fas fa-circle-notch"></i></div>
+                    </div>
+                    <img src="${fullImage}" class="max-w-full max-h-[75vh] object-contain rounded-lg shadow-2xl opacity-0 transition-opacity duration-300" alt="${item.name}" referrerpolicy="no-referrer" onload="if(this.previousElementSibling && this.previousElementSibling.classList.contains('image-loader')) this.previousElementSibling.remove(); this.classList.remove('opacity-0');" onerror="handleLightboxError(this, '${proxyImage}', '${item.thumbnailLink || ''}')">
                 `;
             }
         }
