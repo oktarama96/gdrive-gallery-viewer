@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rama Gallery | Photography</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .photo-card:hover .overlay { opacity: 1; }
+        .overlay { transition: opacity 0.3s ease; }
+        .btn-loading { pointer-events: none; opacity: 0.7; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-12 text-center">
+            <h1 class="text-4xl font-bold tracking-tight text-white mb-2">PHOTO GALLERY</h1>
+            <p class="text-slate-400">Minimalist portfolio viewer (v4 - Smart URL Parsing)</p>
+        </header>
+
+        <!-- Config Section -->
+        <div id="config-panel" class="bg-slate-800/50 backdrop-blur-md p-6 rounded-2xl border border-slate-700 shadow-xl mb-12 max-w-2xl mx-auto">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Google Apps Script URL</label>
+                    <input type="text" id="gas-url" 
+                        value="https://script.google.com/macros/s/AKfycbzcE3I8FqxHHw6NvVjoHvaaIjXu4ioF1S1aZg7gjwvJIIMYzdjNOJzrUVW80sGV53ic/exec"
+                        class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Google Drive Folder Link</label>
+                    <input type="text" id="drive-link" placeholder="Paste full Google Drive folder link here" 
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                </div>
+                <button id="load-btn" onclick="loadPhotos()" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition duration-200 flex items-center justify-center gap-2">
+                    <i class="fas fa-sync-alt" id="btn-icon"></i>
+                    <span>Load Gallery</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Gallery Grid -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="animate-spin text-4xl mb-4 text-blue-500"><i class="fas fa-circle-notch"></i></div>
+            <p class="text-slate-400 animate-pulse">Syncing with Google Drive...</p>
+        </div>
+
+        <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <!-- Photos will appear here -->
+        </div>
+    </div>
+
+    <script>
+        // Extract Folder ID from various Drive URL formats
+        function extractFolderId(url) {
+            const regex = /folders\/([a-zA-Z0-9_-]{25,})/;
+            const match = url.match(regex);
+            return match ? match[1] : url.trim(); // Fallback to raw input if regex fails
+        }
+
+        async function loadPhotos() {
+            const gasUrl = document.getElementById('gas-url').value;
+            const driveInput = document.getElementById('drive-link').value;
+            const grid = document.getElementById('gallery-grid');
+            const loading = document.getElementById('loading');
+            const btn = document.getElementById('load-btn');
+            const icon = document.getElementById('btn-icon');
+
+            const folderId = extractFolderId(driveInput);
+
+            if (!folderId || !gasUrl) {
+                alert('Please provide both Apps Script URL and a valid Folder Link.');
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            grid.innerHTML = '';
+            btn.classList.add('btn-loading');
+            icon.classList.add('animate-spin');
+
+            try {
+                const response = await fetch(`/gallery/api/photos?folderId=${folderId}&gasUrl=${encodeURIComponent(gasUrl)}`);
+                const photos = await response.json();
+
+                if (photos.error) throw new Error(photos.error);
+
+                loading.classList.add('hidden');
+                
+                if (photos.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No images found in this folder.</div>';
+                } else {
+                    photos.forEach((photo, index) => {
+                        const thumbnail = `https://lh3.googleusercontent.com/d/${photo.id}=s1000`;
+                        const download = `https://drive.google.com/uc?export=download&id=${photo.id}`;
+
+                        const card = `
+                            <div class="photo-card relative bg-slate-800 rounded-xl overflow-hidden shadow-lg border border-slate-700 aspect-square group animate-fade-in" style="animation-delay: ${index * 50}ms">
+                                <img src="${thumbnail}" class="w-full h-full object-cover" alt="${photo.name}" loading="lazy" onerror="this.src='https://placehold.co/400x400/1e293b/white?text=Error+Loading'">
+                                <div class="overlay absolute inset-0 bg-black/70 opacity-0 flex flex-col items-center justify-center p-4">
+                                    <p class="text-xs font-semibold mb-4 truncate w-full text-center px-2 text-white">${photo.name}</p>
+                                    <div class="flex gap-4">
+                                        <a href="${download}" target="_blank" class="bg-blue-600 hover:bg-blue-700 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="Download">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                        <a href="${thumbnail}" target="_blank" class="bg-slate-700 hover:bg-slate-600 w-10 h-10 flex items-center justify-center rounded-full text-white transition transform hover:scale-110" title="View Full">
+                                            <i class="fas fa-expand"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        grid.innerHTML += card;
+                    });
+                }
+            } catch (err) {
+                loading.classList.add('hidden');
+                alert('Error: ' + err.message);
+            } finally {
+                btn.classList.remove('btn-loading');
+                icon.classList.remove('animate-spin');
+            }
+        }
+    </script>
+</body>
+</html>
