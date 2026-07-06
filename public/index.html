@@ -14,6 +14,7 @@
         .btn-loading { pointer-events: none; opacity: 0.7; }
         .animate-fade-in { animation: fadeIn 0.5s ease-in forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #gallery-grid { --grid-cols: 2; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -60,11 +61,22 @@
             </button>
         </div>
 
-        <!-- Filter Tabs -->
-        <div id="filter-tabs" class="hidden justify-center gap-2 mb-8 animate-fade-in">
-            <button onclick="setFilter('all')" id="filter-all" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-blue-600 text-white shadow-lg">All</button>
-            <button onclick="setFilter('photos')" id="filter-photos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Photos</button>
-            <button onclick="setFilter('videos')" id="filter-videos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Videos</button>
+        <!-- Controls (Filter + Grid Switcher) -->
+        <div id="controls-section" class="hidden flex-col sm:flex-row items-center justify-between gap-4 mb-8 animate-fade-in">
+            <!-- Filter Tabs -->
+            <div class="flex gap-2">
+                <button onclick="setFilter('all')" id="filter-all" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-blue-600 text-white shadow-lg">All</button>
+                <button onclick="setFilter('photos')" id="filter-photos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Photos</button>
+                <button onclick="setFilter('videos')" id="filter-videos" class="px-5 py-2 rounded-full text-sm font-semibold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700">Videos</button>
+            </div>
+            
+            <!-- Grid Column Selector -->
+            <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700 p-1.5 rounded-full shadow-lg backdrop-blur-sm">
+                <span class="text-xs text-slate-400 pl-3 pr-1 font-medium select-none">Columns:</span>
+                <div class="flex gap-1" id="grid-controls">
+                    <!-- Buttons will be dynamically updated for mobile/desktop -->
+                </div>
+            </div>
         </div>
 
         <!-- Gallery Grid -->
@@ -73,7 +85,7 @@
             <p class="text-slate-400 animate-pulse">Syncing with Google Drive...</p>
         </div>
 
-        <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div id="gallery-grid" class="grid gap-4 sm:gap-6 transition-all duration-300" style="grid-template-columns: repeat(var(--grid-cols, 2), minmax(0, 1fr))">
             <!-- Photos will appear here -->
         </div>
     </div>
@@ -152,6 +164,71 @@
         let activeFilter = 'all';
         let currentLightboxIndex = -1;
         let imageErrorCount = 0;
+
+        let currentMobileCols = 2; // Default to 2 columns on mobile for higher density
+        let currentDesktopCols = 4; // Default to 4 columns on desktop
+
+        function isMobileView() {
+            return window.innerWidth < 640;
+        }
+
+        function getActiveCols() {
+            return isMobileView() ? currentMobileCols : currentDesktopCols;
+        }
+
+        function setActiveCols(cols) {
+            if (isMobileView()) {
+                currentMobileCols = cols;
+            } else {
+                currentDesktopCols = cols;
+            }
+            updateGridLayout();
+        }
+
+        function updateGridLayout() {
+            const grid = document.getElementById('gallery-grid');
+            if (!grid) return;
+            
+            const cols = getActiveCols();
+            grid.style.setProperty('--grid-cols', cols);
+            
+            // Adjust gap size based on density
+            if (isMobileView()) {
+                if (cols >= 3) {
+                    grid.classList.remove('gap-4', 'gap-6');
+                    grid.classList.add('gap-2'); // Tight gap for high density mobile grid
+                } else {
+                    grid.classList.remove('gap-2', 'gap-6');
+                    grid.classList.add('gap-4'); // Normal gap for 2 columns
+                }
+            } else {
+                grid.classList.remove('gap-2', 'gap-4');
+                grid.classList.add('gap-6'); // Default desktop gap
+            }
+            
+            renderGridControls();
+        }
+
+        function renderGridControls() {
+            const container = document.getElementById('grid-controls');
+            if (!container) return;
+            
+            const isMobile = isMobileView();
+            const activeCols = getActiveCols();
+            const options = isMobile ? [2, 3, 4] : [2, 3, 4, 5, 6];
+            
+            container.innerHTML = options.map(cols => {
+                const isActive = cols === activeCols;
+                const activeClass = "bg-blue-600 text-white font-semibold shadow-md";
+                const inactiveClass = "text-slate-400 hover:text-white hover:bg-slate-700/50";
+                return `
+                    <button onclick="setActiveCols(${cols})" 
+                        class="w-8 h-8 rounded-full text-xs transition duration-200 ${isActive ? activeClass : inactiveClass}">
+                        ${cols}
+                    </button>
+                `;
+            }).join('');
+        }
 
         // Extract Folder ID from various Drive URL formats
         function extractFolderId(url) {
@@ -264,7 +341,7 @@
             const loading = document.getElementById('loading');
             const btn = document.getElementById('load-btn');
             const icon = document.getElementById('btn-icon');
-            const filterTabs = document.getElementById('filter-tabs');
+            const controlsSection = document.getElementById('controls-section');
             const privateBanner = document.getElementById('private-folder-banner');
 
             const folderId = extractFolderId(driveInput);
@@ -276,7 +353,8 @@
 
             loading.classList.remove('hidden');
             grid.innerHTML = '';
-            filterTabs.classList.add('hidden');
+            controlsSection.classList.remove('flex', 'flex-col', 'sm:flex-row');
+            controlsSection.classList.add('hidden');
             privateBanner.classList.add('hidden');
             btn.classList.add('btn-loading');
             icon.classList.add('animate-spin');
@@ -330,9 +408,10 @@
                 if (allMedia.length === 0) {
                     grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">No media found in this folder.</div>';
                 } else {
-                    filterTabs.classList.remove('hidden');
-                    filterTabs.classList.add('flex');
+                    controlsSection.classList.remove('hidden');
+                    controlsSection.classList.add('flex', 'flex-col', 'sm:flex-row');
                     renderGallery();
+                    updateGridLayout();
                 }
             } catch (err) {
                 loading.classList.add('hidden');
@@ -563,6 +642,10 @@
             else if (e.key === 'ArrowLeft') prevMedia();
             else if (e.key === 'ArrowRight') nextMedia();
         }
+
+        // Initialize grid layout setup
+        window.addEventListener('resize', updateGridLayout);
+        updateGridLayout();
     </script>
 </body>
 </html>
